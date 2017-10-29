@@ -2,9 +2,11 @@
 
 from django.conf import settings
 from django.contrib import messages
+from django.shortcuts import redirect
 from django.http import HttpResponseForbidden
 from importlib import import_module
-from mongoengine.fields import EmbeddedDocumentField
+from json import loads
+from mongoengine.fields import EmbeddedDocumentField, DictField
 
 from mongonaut.exceptions import NoMongoAdminSpecified
 from mongonaut.forms import MongoModelForm
@@ -15,7 +17,6 @@ from mongonaut.utils import trim_field_key
 
 
 class AppStore(object):
-    """Represents Django apps in the django-mongonaut admin."""
 
     def __init__(self, module):
         self.models = []
@@ -30,13 +31,11 @@ class AppStore(object):
 
 
 class MongonautViewMixin(object):
-    """Used for all views in the project, handles authorization to content,
-        viewing, controlling and setting of data.
-    """
 
     def render_to_response(self, context, **response_kwargs):
         if hasattr(self, 'permission') and not self.request.user.has_perm(self.permission):
-            return HttpResponseForbidden("You do not have permissions to access this content. Login as a superuser to view and edit data.")
+            return redirect('%s?next=%s' % (settings.LOGIN_URL, settings.LOGIN_REDIRECT_URL))
+            #return HttpResponseForbidden("You do not have permissions to access this content.")
 
         return self.response_class(
             request=self.request,
@@ -53,9 +52,9 @@ class MongonautViewMixin(object):
                                                  "//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/css/bootstrap-combined.min.css")
         context['MONGONAUT_TWITTER_BOOTSTRAP_ALERT'] = getattr(settings,
                                                                "MONGONAUT_TWITTER_BOOTSTRAP_ALERT",
-                                                       "//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min.js")
+                                                       "//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min")
         return context
-
+    
     def get_mongoadmins(self):
         """ Returns a list of all mongoadmin implementations for the site """
         apps = []
@@ -184,6 +183,7 @@ class MongonautFormViewMixin(object):
         is_embedded_doc = (isinstance(document._fields.get(current_key, None), EmbeddedDocumentField)
                           if hasattr(document, '_fields') else False)
         is_list = not key_array_digit is None
+        is_dict = isinstance(document._fields.get(current_key, None), DictField)
         key_in_fields = current_key in document._fields.keys() if hasattr(document, '_fields') else False
 
         # This ensures you only go through each documents keys once, and do not duplicate data
@@ -192,14 +192,17 @@ class MongonautFormViewMixin(object):
                 self.set_embedded_doc(document, form_key, current_key, remaining_key)
             elif is_list:
                 self.set_list_field(document, form_key, current_key, remaining_key, key_array_digit)
+            elif is_dict:
+                value = translate_value(document._fields[current_key], loads(self.form.cleaned_data[form_key]))
+                setattr(document, current_key, value)
             else:
                 value = translate_value(document._fields[current_key],
                                         self.form.cleaned_data[form_key])
                 setattr(document, current_key, value)
 
     def set_embedded_doc(self, document, form_key, current_key, remaining_key):
-        """Get the existing embedded document if it exists, else created it."""
 
+        # Get the existing embedded document if it exists, else created it.
         embedded_doc = getattr(document, current_key, False)
         if not embedded_doc:
             embedded_doc = document._fields[current_key].document_type_obj()
@@ -209,9 +212,6 @@ class MongonautFormViewMixin(object):
         setattr(document, current_key, embedded_doc)
 
     def set_list_field(self, document, form_key, current_key, remaining_key, key_array_digit):
-        """1. Figures out what value the list ought to have
-           2. Sets the list
-        """
 
         document_field = document._fields.get(current_key)
 

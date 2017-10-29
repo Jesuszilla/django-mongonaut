@@ -2,8 +2,7 @@
 
 from django.forms import Form
 from mongoengine.base import TopLevelDocumentMetaclass
-from mongoengine.fields import EmbeddedDocumentField
-from mongoengine.fields import ListField
+from mongoengine.fields import EmbeddedDocumentField, ListField, DictField
 
 from .form_mixins import MongoModelFormBaseMixin
 from .form_utils import has_digit
@@ -33,7 +32,6 @@ class MongoModelForm(MongoModelFormBaseMixin, Form):
         super(MongoModelForm, self).__init__(*args, **kwargs)
 
     def set_fields(self):
-        """Sets existing data to form fields."""
 
         # Get dictionary map of current model
         if self.is_initialized:
@@ -45,15 +43,13 @@ class MongoModelForm(MongoModelFormBaseMixin, Form):
         self.set_form_fields(form_field_dict)
 
     def set_post_data(self):
-        """
-            Need to set form data so that validation on all post data occurs and
-            places newly entered form data on the form object.
-        """
+        # Need to set form data so that validation on all post data occurs and
+        # places newly entered form data on the form object.
         self.form.data = self.post_data_dict
 
         # Specifically adding list field keys to the form so they are included
         # in form.cleaned_data after the call to is_valid
-        for field_key, field in self.form.fields.iteritems():
+        for field_key, field in self.form.fields.items():
             if has_digit(field_key):
                 # We have a list field.
                 base_key = make_key(field_key, exclude_last_string=True)
@@ -65,9 +61,6 @@ class MongoModelForm(MongoModelFormBaseMixin, Form):
                         self.form.fields.update({key: field})
 
     def get_form(self):
-        """
-        Generate the form for view.
-        """
         self.set_fields()
         if self.post_data_dict is not None:
             self.set_post_data()
@@ -93,7 +86,7 @@ class MongoModelForm(MongoModelFormBaseMixin, Form):
         if not isinstance(document, TopLevelDocumentMetaclass) and doc_key:
             doc_dict.update({"_field_type": EmbeddedDocumentField})
 
-        for key, field in document._fields.iteritems():
+        for key, field in document._fields.items():
             doc_dict[key] = field
 
         return doc_dict
@@ -120,15 +113,14 @@ class MongoModelForm(MongoModelFormBaseMixin, Form):
 
         return list_dict
 
-    def create_document_dictionary(self, document, document_key=None,
-                                                        owner_document=None):
+    def create_document_dictionary(self, document, document_key=None, owner_document=None):
         """
         Given document generates a dictionary representation of the document.
         Includes the widget for each for each field in the document.
         """
         doc_dict = self.create_doc_dict(document, document_key, owner_document)
 
-        for doc_key, doc_field in doc_dict.iteritems():
+        for doc_key, doc_field in doc_dict.items():
             # Base fields should not be evaluated
             if doc_key.startswith("_"):
                 continue

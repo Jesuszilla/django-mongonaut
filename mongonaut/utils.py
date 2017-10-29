@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from mongoengine.base import ObjectIdField, ValidationError
-from mongoengine.fields import ReferenceField
+import mongoengine.base
+from mongoengine.fields import ReferenceField, ObjectIdField
 
 # Used to validate object_ids.
 # Called by is_valid_object_id
@@ -9,7 +9,6 @@ OBJECT_ID = ObjectIdField()
 
 
 def is_valid_object_id(value):
-    """Validates BSON IDs using mongoengine's ObjectIdField field."""
     try:
         OBJECT_ID.validate(value)
         return True
